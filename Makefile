@@ -9,7 +9,7 @@ CFLAGS = -std=gnu99
 SRCEXT = c
 
 BINDIR = .
-exe_file = $(BINDIR)/$(shell basename "${PWD}")
+exe_file = smallsh
 
 # Handle debug case
 DEBUG ?= 1
