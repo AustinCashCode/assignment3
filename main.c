@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
@@ -20,6 +21,30 @@ int count_args(char ** args)
         ++total_args;
     }
     return total_args;
+}
+
+
+
+int get_child_count(pid_t * to_count) {
+    int i = 0;
+    while(to_count[i] != -5) {
+        i++;
+    }
+    return i;
+}
+
+
+
+pid_t * append_child(pid_t to_add, pid_t * to_append) {
+    int count = get_child_count(to_append) + 1;
+    pid_t * new_children = (pid_t*)realloc((to_append), (count + 2) * sizeof(pid_t));
+    
+    for (int i = 0; i < count; i++) {
+        new_children[i] = to_append[i];
+    }
+    new_children[count -1] = to_add;
+    new_children[count] = -5;
+    return new_children;
 }
 
 
@@ -63,7 +88,7 @@ void io_redirect(char ** args)
     int argc = count_args(args);
     for(int i = 0; i < argc; ++i) {
         if(*args[i] == '<') {
-            int FD1 = open(args[i + 1]);
+            int FD1 = open(args[i + 1], O_RDONLY);
 
             //Need to check for errors. We can exit here
             //because this function is only called in the child.
@@ -86,7 +111,7 @@ void io_redirect(char ** args)
             argc = argc - 2; //We also removed two arguments, so argc needs correction
         }
         if(*args[i] == '>') {
-            int FD2 = open(args[i + 1]);
+            int FD2 = open(args[i + 1], O_WRONLY | O_CREAT | O_TRUNC, 700);
 
             if(FD2 == -1) {
                 perror("ERROR: Could not open file.");
@@ -113,11 +138,19 @@ void io_redirect(char ** args)
 //Creates a process which executes the command in args[0]
 //Terminates the child once finished
 //Returns the exit status of the child
-int command_execution(char ** args)
+int command_execution(char ** args, pid_t * children)
 {
     int erval;
     int exit_val = 0;
     pid_t child_pid = -5;
+    int background_flag = 0;
+    int argc = count_args(args);
+
+    if(*args[argc-1] == '&') {
+        background_flag = 1;
+        args[argc-1] = NULL;
+        --argc;
+    }
 
     child_pid = fork();
     switch(child_pid) {
@@ -136,11 +169,16 @@ int command_execution(char ** args)
 
         default:
             //parent
-            child_pid = waitpid(child_pid, &erval, 0);
-
-            if(WIFSIGNALED(erval)){
-                exit_val = 1; //We need to hold on to the previous exit value for the status command
-                printf("Child %d terminated due to signal %d\n", child_pid, WTERMSIG(erval));
+            if(background_flag == 0) {
+                child_pid = waitpid(child_pid, &erval, 0);
+                if(WIFSIGNALED(erval)) {
+                    exit_val = 1; //We need to hold on to the previous exit value for the status command
+                    printf("Child %d terminated due to signal %d\n", child_pid, WTERMSIG(erval));
+                }
+            } else {
+                children = append_child(child_pid, children);
+                printf("Background PID is %d\n", child_pid);
+                child_pid = waitpid(child_pid, &erval, WNOHANG);
             }
             break;
     }
@@ -150,11 +188,17 @@ int command_execution(char ** args)
 
 
 
+
+
+
+
 int main(void)
 {
     char input[MAX_LINE];
     char * args[MAX_ARGS] = {NULL};
     char * token;
+    pid_t * children = NULL;
+    int child_status;
     int nav = 1;
     int wait_status = 0;
 
@@ -196,7 +240,7 @@ int main(void)
             printf("EXIT STATUS: %d\n", wait_status);
         }
         else {
-            wait_status = command_execution(args);
+            wait_status = command_execution(args, children);
         }
 
         //We need to remove all the old args, or else they could
@@ -204,6 +248,18 @@ int main(void)
         for(int i = 0; i < MAX_ARGS; i++) { 
             free(args[i]); 
             args[i] = NULL;
+        }
+
+        int x = get_child_count(children);
+        for(int i = 0; i < x; ++i) {
+            if(waitpid(children[i], &child_status, WNOHANG)) {
+                if(WIFEXITED(child_status)) {
+                    printf("Child %d done normally. Exit value: %d", children[i], WEXITSTATUS(child_status));
+                } else {
+                    printf("Child %d terminated abnormally. Exit value: %d", children[i], WTERMSIG(child_status));
+                }
+            }
+            
         }
     }
 
