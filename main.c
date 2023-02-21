@@ -12,8 +12,21 @@
 
 
 
+//Returns the total number of arguments in a given ragged array
+int count_args(char ** args)
+{
+    int total_args = 0;
+    for(int i = 0; args[i]; i++) {
+        ++total_args;
+    }
+    return total_args;
+}
+
+
+
 //Alters the passed-in string to expand any instance of '$$' to the PID.
-void variable_expansion(char * str) {
+void variable_expansion(char * str) 
+{
     char pid_str[8]; //Linux PID's only go up to 2^22, which has 7 digits.
     pid_t pid = getpid();
     sprintf(pid_str, "%d", pid); //Convert PID to a str so we can insert it later
@@ -24,7 +37,8 @@ void variable_expansion(char * str) {
     //This loop finds the portion of the string to the left of '$$'
     //and to the right of '$$', then copies the data into a new string
     //that is appropriately sized in the correct order.
-    while (pid_in_str != NULL) {
+    while (pid_in_str != NULL) 
+    {
         size_t prefix_len = pid_in_str - str;
         size_t suffix_len = strlen(pid_in_str + token_len);
         size_t new_str_len = prefix_len + pid_len + suffix_len + 1;
@@ -40,12 +54,54 @@ void variable_expansion(char * str) {
 
 
 
+//Takes a ragged array representing the command and it's arguments
+//Creates a process which executes the command in args[0]
+//Terminates the child once finished
+//Returns the exit status of the child
+int command_execution(char ** args)
+{
+    int erval;
+    int exit_val = 0;
+    pid_t child_pid = -5;
+
+    child_pid = fork();
+    switch(child_pid) {
+        case -1:
+            perror("fork() failed\n");
+            exit(1);
+            break;
+
+        case 0:
+            //child
+            execvp(args[0], args);
+            perror("File not found");
+            exit(EXIT_FAILURE);
+            break;
+
+        default:
+            //parent
+            child_pid = waitpid(child_pid, &erval, 0);
+
+            if(WIFSIGNALED(erval)){
+                exit_val = 1; //We need to hold on to the previous exit value for the status command
+                printf("Child %d terminated due to signal %d\n", child_pid, WTERMSIG(erval));
+            }
+            break;
+    }
+
+    return exit_val;
+}
+
+
+
 int main(void)
 {
     char input[MAX_LINE];
     char * args[MAX_ARGS] = {NULL};
     char * token;
     int nav = 1;
+    int wait_status = 0;
+
 
     while(nav == 1)
     {
@@ -76,17 +132,20 @@ int main(void)
                 chdir(args[1]);
             }
             else {
-                chdir(char * home_dir = getenv(HOME));
+                char * home_dir = getenv("HOME");
+                chdir(home_dir);
             }
         }
-        else if(strcmp(args[0], "ls") == 0) {
+        else if(strcmp(args[0], "status") == 0) {
+            printf("EXIT STATUS: %d\n", wait_status);
         }
         else {
-            //Execute a process
+            wait_status = command_execution(args);
         }
+
         //We need to remove all the old args, or else they could
         //interfere with future commands.
-        for(i = 0; i < MAX_ARGS; i++) { 
+        for(int i = 0; i < MAX_ARGS; i++) { 
             free(args[i]); 
             args[i] = NULL;
         }
@@ -96,7 +155,8 @@ int main(void)
 }
 
 
-void SIGINT_handler() {
+void SIGINT_handler() 
+{
     char* err_message = "SIGINT detected\n";
     write(STDOUT_FILENO, err_message, 16);
     sleep(10);
