@@ -54,6 +54,61 @@ void variable_expansion(char * str)
 
 
 
+//Checks the args vector for '<' or '>' and redirects
+//stdin and stdout appropriately. This function will also
+//remove the found tokens, since they should not be passed in
+//to the command.
+void io_redirect(char ** args)
+{
+    int argc = count_args(args);
+    for(int i = 0; i < argc; ++i) {
+        if(*args[i] == '<') {
+            int FD1 = open(args[i + 1]);
+
+            //Need to check for errors. We can exit here
+            //because this function is only called in the child.
+            if(FD1 == -1) {
+                perror("ERROR: Could not open file.");
+                exit(1);    
+            }
+
+            dup2(FD1, 0);
+            free(args[i]);
+            free(args[i + 1]);
+
+            for(int j = i; j < argc - 2; ++j) {
+                args[j] = args[j + 2];
+            }
+
+            args[argc - 1] = NULL;
+            args[argc - 2] = NULL;
+            i--; //Since we moved the array back, we need to re-check this index
+            argc = argc - 2; //We also removed two arguments, so argc needs correction
+        }
+        if(*args[i] == '>') {
+            int FD2 = open(args[i + 1]);
+
+            if(FD2 == -1) {
+                perror("ERROR: Could not open file.");
+                exit(1);    
+            }
+
+            dup2(FD2, 1);
+            free(args[i]);
+            free(args[i + 1]);
+            for(int j = i; j < argc - 2; ++j) {
+                args[j] = args[j + 2];
+            }
+            args[argc - 1] = NULL;
+            args[argc - 2] = NULL;
+            i--;
+            argc = argc - 2;
+        }
+    }
+}
+
+
+
 //Takes a ragged array representing the command and it's arguments
 //Creates a process which executes the command in args[0]
 //Terminates the child once finished
@@ -73,9 +128,10 @@ int command_execution(char ** args)
 
         case 0:
             //child
+            io_redirect(args);
             execvp(args[0], args);
             perror("File not found");
-            exit(EXIT_FAILURE);
+            exit(1);
             break;
 
         default:
