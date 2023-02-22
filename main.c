@@ -102,7 +102,7 @@ void io_redirect(char ** args)
             argc = argc - 2; //We also removed two arguments, so argc needs correction
         }
         if(*args[i] == '>') {
-            int FD2 = open(args[i + 1], O_WRONLY | O_CREAT | O_TRUNC, 700);
+            int FD2 = open(args[i + 1], O_WRONLY | O_TRUNC | O_CREAT, 0777);
 
             if(FD2 == -1) {
                 perror("ERROR: Could not open file.");
@@ -169,7 +169,6 @@ int command_execution(char ** args, list_of_children * children)
             } else {
                 push(child_pid, children);
                 printf("Background PID is %d\n", child_pid);
-                child_pid = waitpid(child_pid, &erval, WNOHANG);
             }
             break;
     }
@@ -236,6 +235,8 @@ int main(void)
             free(args[i]); 
             args[i] = NULL;
         }
+
+        check_background_processes(children);
     }
     return EXIT_SUCCESS;
 }
