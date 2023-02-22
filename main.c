@@ -1,3 +1,16 @@
+/*
+    Austin J. Cash
+    CS 344
+
+    This file contains the bulk of the code for the 
+    smallsh program, including the main event loop, 
+    process creation, and I/O management.
+
+    LAST EDIT: 2/21/2023
+*/
+
+
+
 #include <signal.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -6,6 +19,8 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+
+#include "pid_list.c"
 
 //These are defined as per the spec.
 #define MAX_LINE 2048   //Longest possible input
@@ -21,30 +36,6 @@ int count_args(char ** args)
         ++total_args;
     }
     return total_args;
-}
-
-
-
-int get_child_count(pid_t * to_count) {
-    int i = 0;
-    while(to_count[i] != -5) {
-        i++;
-    }
-    return i;
-}
-
-
-
-pid_t * append_child(pid_t to_add, pid_t * to_append) {
-    int count = get_child_count(to_append) + 1;
-    pid_t * new_children = (pid_t*)realloc((to_append), (count + 2) * sizeof(pid_t));
-    
-    for (int i = 0; i < count; i++) {
-        new_children[i] = to_append[i];
-    }
-    new_children[count -1] = to_add;
-    new_children[count] = -5;
-    return new_children;
 }
 
 
@@ -138,7 +129,7 @@ void io_redirect(char ** args)
 //Creates a process which executes the command in args[0]
 //Terminates the child once finished
 //Returns the exit status of the child
-int command_execution(char ** args, pid_t * children)
+int command_execution(char ** args, list_of_children * children)
 {
     int erval;
     int exit_val = 0;
@@ -176,7 +167,7 @@ int command_execution(char ** args, pid_t * children)
                     printf("Child %d terminated due to signal %d\n", child_pid, WTERMSIG(erval));
                 }
             } else {
-                children = append_child(child_pid, children);
+                push(child_pid, children);
                 printf("Background PID is %d\n", child_pid);
                 child_pid = waitpid(child_pid, &erval, WNOHANG);
             }
@@ -188,16 +179,12 @@ int command_execution(char ** args, pid_t * children)
 
 
 
-
-
-
-
 int main(void)
 {
     char input[MAX_LINE];
     char * args[MAX_ARGS] = {NULL};
     char * token;
-    pid_t * children = NULL;
+    list_of_children * children = NULL;
     int child_status;
     int nav = 1;
     int wait_status = 0;
@@ -249,20 +236,7 @@ int main(void)
             free(args[i]); 
             args[i] = NULL;
         }
-
-        int x = get_child_count(children);
-        for(int i = 0; i < x; ++i) {
-            if(waitpid(children[i], &child_status, WNOHANG)) {
-                if(WIFEXITED(child_status)) {
-                    printf("Child %d done normally. Exit value: %d", children[i], WEXITSTATUS(child_status));
-                } else {
-                    printf("Child %d terminated abnormally. Exit value: %d", children[i], WTERMSIG(child_status));
-                }
-            }
-            
-        }
     }
-
     return EXIT_SUCCESS;
 }
 
