@@ -6,7 +6,11 @@
     smallsh program, including the main event loop, 
     process creation, and I/O management.
 
-    LAST EDIT: 2/21/2023
+    LAST EDIT: 2/23/2023
+
+    TODO:   Add signal handling
+            Add foreground-only mode
+            Figure out why child PID  isn't printing
 */
 
 
@@ -129,7 +133,7 @@ void io_redirect(char ** args)
 //Creates a process which executes the command in args[0]
 //Terminates the child once finished
 //Returns the exit status of the child
-int command_execution(char ** args, list_of_children * children)
+int command_execution(char ** args, list_of_children ** children)
 {
     int erval;
     int exit_val = 0;
@@ -167,7 +171,7 @@ int command_execution(char ** args, list_of_children * children)
                     printf("Child %d terminated due to signal %d\n", child_pid, WTERMSIG(erval));
                 }
             } else {
-                push(child_pid, children);
+                push(child_pid, *children);
                 printf("Background PID is %d\n", child_pid);
             }
             break;
@@ -181,6 +185,7 @@ int command_execution(char ** args, list_of_children * children)
 int main(void)
 {
     char input[MAX_LINE];
+    int argc = 0;
     char * args[MAX_ARGS] = {NULL};
     char * token;
     list_of_children * children = NULL;
@@ -226,12 +231,13 @@ int main(void)
             printf("EXIT STATUS: %d\n", wait_status);
         }
         else {
-            wait_status = command_execution(args, children);
+            wait_status = command_execution(args, &children);
         }
 
         //We need to remove all the old args, or else they could
         //interfere with future commands.
-        for(int i = 0; i < MAX_ARGS; i++) { 
+        argc = count_args(args);
+        for(int i = 0; i < argc; i++) { 
             free(args[i]); 
             args[i] = NULL;
         }

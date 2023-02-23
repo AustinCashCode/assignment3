@@ -9,7 +9,7 @@
     frequently removed from the middle of the list, which
     contiguous arrays are bad at handling.
 
-    LAST EDIT: 2/21/2023
+    LAST EDIT: 2/23/2023
 */
 
 typedef struct myLLL {
