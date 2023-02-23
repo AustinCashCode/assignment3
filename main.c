@@ -171,7 +171,7 @@ int command_execution(char ** args, list_of_children ** children)
                     printf("Child %d terminated due to signal %d\n", child_pid, WTERMSIG(erval));
                 }
             } else {
-                push(child_pid, *children);
+                *children = push(child_pid, *children);
                 printf("Background PID is %d\n", child_pid);
             }
             break;
