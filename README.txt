@@ -1,5 +1,2 @@
-# assignment3
-
-Complie Command: make
-
-Alternatively, type gcc -std=gnu99 main.c -o smallsh
+# assignment3 compile command
+gcc -std=gnu99 main.c -o smallsh

@@ -45,15 +45,18 @@ void delete_child(list_of_children * to_delete) {
     //error. This is not bad style, I will argue with anyone who
     //says otherwise!
     if(!to_delete) {return;} 
+
     if(!to_delete -> next) {
         free(to_delete);
         to_delete = NULL;
         return;
     }
+    
     list_of_children * temp = to_delete -> next;
     to_delete -> child_PID = temp -> child_PID;
     to_delete -> next = temp -> next;
     free(temp);
+    
     return;
 }
 
@@ -74,11 +77,11 @@ void check_background_processes(list_of_children * children) {
 
     waitpid(children -> child_PID, &erval, WNOHANG);
     if(WIFEXITED(erval)) {
-        printf("Background process %d exited with value %d", children -> child_PID, WEXITSTATUS(erval));
+        printf("Background process %d exited with value %d\n", children -> child_PID, WEXITSTATUS(erval));
         delete_child(children);
     }
     else if(WIFSIGNALED(erval)){
-        printf("Background process %d terminated by signal %d", children -> child_PID, WTERMSIG(erval));
+        printf("Background process %d terminated by signal %d\n", children -> child_PID, WTERMSIG(erval));
         delete_child(children);
     }
     return;
