@@ -31,6 +31,7 @@
 //These are defined as per the spec.
 #define MAX_LINE 2048   //Longest possible input
 #define MAX_ARGS 512    //Maximum number of arguments
+#define no_op           //A macro that doesn't insert any code.
 
 
 
@@ -170,12 +171,13 @@ int command_execution(char ** args, list_of_children ** children, struct sigacti
         default:
             //parent
 
-            //Condition to handle background processes
             if(background_flag == 1) {
+                //background processes
                 *children = push(child_pid, *children);
                 printf("Background PID is %d\n", child_pid);
             } 
             else {
+                //foreground processes
                 child_pid = waitpid(child_pid, &erval, 0);
                 if(WIFSIGNALED(erval)) {
                     exit_val = WTERMSIG(erval); //We need to hold on to the previous exit value for the status command
@@ -236,8 +238,12 @@ int main(void)
         //Since the first token is always the command, we check for the 
         //pre-programmed commands first and execute them.
 
-        if(!args[0] || strcmp(args[0], "#") == 0) {         
-            children = check_background_processes(children);
+        if(!args[0] || args[0][0] == '#') {
+            //This is supposed to guard the rest of the event loop.
+            //I was using continue, but continue is incorrect b/c
+            //we still need to delete args[] and check child processes,
+            //And I didn't want to duplicate them needlessly.
+            no_op;
         }
         else if(strcmp(args[0], "exit") == 0) {
             kill(1, SIGKILL);
