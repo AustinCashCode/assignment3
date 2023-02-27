@@ -212,7 +212,7 @@ int main(void)
         //pre-programmed commands first and execute them.
 
         if(!args[0] || strcmp(args[0], "#") == 0) {         
-            continue;
+            children = check_background_processes(children);
         }
         else if(strcmp(args[0], "exit") == 0) {
             kill(1, SIGKILL);
@@ -242,7 +242,7 @@ int main(void)
             args[i] = NULL;
         }
 
-        check_background_processes(children);
+        children = check_background_processes(children);
     }
     return EXIT_SUCCESS;
 }

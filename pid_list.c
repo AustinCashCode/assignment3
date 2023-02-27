@@ -40,16 +40,16 @@ list_of_children * push(pid_t data, list_of_children * head) {
 //and the only time our program deletes a single node is when
 //it is already pointing to it, so the typical O(n) search + delete
 //algorithm can be replaced by this O(1) algorithm.
-void delete_child(list_of_children * to_delete) {
+list_of_children * delete_child(list_of_children * to_delete) {
     //Unbracketed, single-line guard clauses are a huge soruce of
     //error. This is not bad style, I will argue with anyone who
     //says otherwise!
-    if(!to_delete) {return;} 
+    if(!to_delete) {return NULL;} 
 
     if(!to_delete -> next) {
         free(to_delete);
         to_delete = NULL;
-        return;
+        return to_delete;
     }
     
     list_of_children * temp = to_delete -> next;
@@ -57,33 +57,36 @@ void delete_child(list_of_children * to_delete) {
     to_delete -> next = temp -> next;
     free(temp);
     
-    return;
+    return to_delete;
 }
 
 
 //Recurses through the passed-in list and checks if they are 
-//still alive. Deletes any nodes that contain a PID corresponding.
+//still alive. Calls deletion any nodes that contain a PID corresponding.
 //to a dead child process. Done in O(n) time, which is optimal given
 //we need to iterate through each node.
-void check_background_processes(list_of_children * children) {
+list_of_children * check_background_processes(list_of_children * children) {
     int erval;
 
-    if(!children) {return;} 
+    if(!children) {return NULL;} 
 
     //We need to perform the recursive call here, or else the function
     //that we use to delete the nodes could interfere with the normal execution
     //of this function.
     check_background_processes(children -> next);
 
-    waitpid(children -> child_PID, &erval, WNOHANG);
-    if(WIFEXITED(erval)) {
-        printf("Background process %d exited with value %d\n", children -> child_PID, WEXITSTATUS(erval));
-        delete_child(children);
-    }
-    else if(WIFSIGNALED(erval)){
-        printf("Background process %d terminated by signal %d\n", children -> child_PID, WTERMSIG(erval));
-        delete_child(children);
-    }
-    return;
+
+    if(waitpid(children -> child_PID, &erval, WNOHANG))
+    {    
+        if(WIFEXITED(erval)) {
+            printf("Background process %d exited with value %d\n", children -> child_PID, WEXITSTATUS(erval));
+            children = delete_child(children);
+        }
+        else {
+            printf("Background process %d terminated by signal %d\n", children -> child_PID, WTERMSIG(erval));
+            children = delete_child(children);
+        }
+    }    
+    return children;    //children gets returned because we have altered it with the delete function.
 }
 
