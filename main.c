@@ -6,11 +6,12 @@
     smallsh program, including the main event loop, 
     process creation, and I/O management.
 
-    LAST EDIT: 2/23/2023
+    LAST EDIT: 2/27/2023
 
-    TODO:   Add signal handling
+    TODO:   
+            Fix signal handaling to properly display
+            termination signal.
             Add foreground-only mode
-            Figure out why child PID  isn't printing
 */
 
 
@@ -25,6 +26,7 @@
 #include <sys/wait.h>
 
 #include "pid_list.c"
+//#include "signal_handlers.c"
 
 //These are defined as per the spec.
 #define MAX_LINE 2048   //Longest possible input
@@ -131,31 +133,34 @@ void io_redirect(char ** args)
 
 //Takes a ragged array representing the command and it's arguments
 //Creates a process which executes the command in args[0]
-//Terminates the child once finished
+//Terminates the child once finished (unless it is a background process)
 //Returns the exit status of the child
-int command_execution(char ** args, list_of_children ** children)
+int command_execution(char ** args, list_of_children ** children, struct sigaction SIGINT_action)
 {
     int erval;
     int exit_val = 0;
     pid_t child_pid = -5;
-    int background_flag = 0;
     int argc = count_args(args);
+    int background_flag = 0;
 
-    if(*args[argc-1] == '&') {
+    if(*args[argc - 1] == '&') {
         background_flag = 1;
         args[argc-1] = NULL;
         --argc;
     }
 
+
     child_pid = fork();
     switch(child_pid) {
         case -1:
+            //error
             perror("fork() failed\n");
             exit(1);
             break;
 
         case 0:
             //child
+            SIGINT_action.sa_handler = SIG_DFL;
             io_redirect(args);
             execvp(args[0], args);
             perror("File not found");
@@ -164,15 +169,18 @@ int command_execution(char ** args, list_of_children ** children)
 
         default:
             //parent
-            if(background_flag == 0) {
-                child_pid = waitpid(child_pid, &erval, 0);
-                if(WIFSIGNALED(erval)) {
-                    exit_val = 1; //We need to hold on to the previous exit value for the status command
-                    printf("Child %d terminated due to signal %d\n", child_pid, WTERMSIG(erval));
-                }
-            } else {
+
+            //Condition to handle background processes
+            if(background_flag == 1) {
                 *children = push(child_pid, *children);
                 printf("Background PID is %d\n", child_pid);
+            } 
+            else {
+                child_pid = waitpid(child_pid, &erval, 0);
+                if(WIFSIGNALED(erval)) {
+                    exit_val = WTERMSIG(erval); //We need to hold on to the previous exit value for the status command
+                    printf("Child %d terminated due to signal %d\n", child_pid, exit_val);
+                }
             }
             break;
     }
@@ -185,16 +193,33 @@ int command_execution(char ** args, list_of_children ** children)
 int main(void)
 {
     char input[MAX_LINE];
-    int argc = 0;
-    char * args[MAX_ARGS] = {NULL};
     char * token;
-    list_of_children * children = NULL;
+    char * args[MAX_ARGS] = {NULL};
+    int argc = 0;
     int child_status;
-    int nav = 1;
+    int nav = 0;
     int wait_status = 0;
+    list_of_children * children = NULL;
+
+    struct sigaction SIGINT_action = {0};
+    struct sigaction SIGSTP_action = {0};
+
+    SIGINT_action.sa_handler = SIG_IGN;
+    sigfillset(&SIGINT_action.sa_mask);
+    SIGINT_action.sa_flags = 0;
+    sigaction(SIGINT, &SIGINT_action, NULL);
+
+/*
+    SIGSTP_action.sa_handler = handle_SIGSTP;
+    sigfillset(&SIGINT_action.sa_mask);
+    SIGSTP_action.sa_flags = 0;
+    sigaction(SIGSTP, &SIGSTP_action, NULL);
+*/
 
 
-    while(nav == 1)
+
+
+    while(nav == 0)
     {
         printf(":");                        //Prompt user for input
         fgets(input, MAX_LINE, stdin);      //Get user input
@@ -216,7 +241,7 @@ int main(void)
         }
         else if(strcmp(args[0], "exit") == 0) {
             kill(1, SIGKILL);
-            nav = 0;
+            nav = 1;
         }
         else if(strcmp(args[0], "cd") == 0) {
             if(args[1]) {
@@ -231,7 +256,7 @@ int main(void)
             printf("EXIT STATUS: %d\n", wait_status);
         }
         else {
-            wait_status = command_execution(args, &children);
+            wait_status = command_execution(args, &children, SIGINT_action);
         }
 
         //We need to remove all the old args, or else they could
@@ -245,12 +270,4 @@ int main(void)
         children = check_background_processes(children);
     }
     return EXIT_SUCCESS;
-}
-
-
-void SIGINT_handler() 
-{
-    char* err_message = "SIGINT detected\n";
-    write(STDOUT_FILENO, err_message, 16);
-    sleep(10);
 }
