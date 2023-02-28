@@ -28,15 +28,19 @@ void handle_SIGTSTP(int signal)
 {
     char * enter_message = "Entering foreground-only mode (& is now ignored)\n";
     char* exit_message = "Exiting foreground-only mode\n";
-    int * foreground_flag = mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    char to_set;
+    FILE* fd = fopen(".foreground_setting", "r+");
+    char foreground_status = fgetc(fd);
 
-    if(*foreground_flag == 0) {
+    if(foreground_status == '0') {
         write(STDOUT_FILENO, enter_message, 49);
-        *foreground_flag = 1;
+        to_set = '1';
     }
     else {
         write(STDOUT_FILENO, exit_message, 29);
-        *foreground_flag = 0;
+        to_set = '0';
     }
-    munmap(foreground_flag, sizeof(int));
+    fseek(fd, 0, SEEK_SET);
+    fputc(to_set, fd);
+    fclose(fd);
 }

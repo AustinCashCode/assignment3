@@ -137,7 +137,7 @@ void io_redirect(char ** args)
 //Creates a process which executes the command in args[0]
 //Terminates the child once finished (unless it is a background process)
 //Returns the exit status of the child
-int command_execution(char ** args, list_of_children ** children, struct sigaction SIGINT_action, int * foreground_flag)
+int command_execution(char ** args, list_of_children ** children, struct sigaction SIGINT_action, char foreground_flag)
 {
     int erval;
     int exit_val = 0;
@@ -172,7 +172,7 @@ int command_execution(char ** args, list_of_children ** children, struct sigacti
         default:
             //parent
 
-            if(background_flag == 1 && *foreground_flag == 0) {
+            if(background_flag == 1 && foreground_flag == '0') {
                 //background processes
                 *children = push(child_pid, *children);
                 printf("Background PID is %d\n", child_pid);
@@ -202,6 +202,7 @@ int command_execution(char ** args, list_of_children ** children, struct sigacti
 int main(void)
 {
     char input[MAX_LINE];
+    char foreground_only_status;
     char * token;
     char * args[MAX_ARGS] = {NULL};
     int my_argc = 0;
@@ -226,8 +227,11 @@ int main(void)
     SIGTSTP_action.sa_flags = 0;
     sigaction(SIGTSTP, &SIGTSTP_action, NULL);
 
-    int * foreground_flag = mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-    *foreground_flag = 0;
+    FILE* fd = fopen(".foreground_setting", "r+");
+    if(fd == NULL) {
+        fd = fopen(".foreground_setting", "w");
+        fputc('0', fd);
+    }
 
 
     while(nav == 0)
@@ -271,7 +275,8 @@ int main(void)
             printf("EXIT STATUS: %d\n", wait_status);
         }
         else {
-            wait_status = command_execution(args, &children, SIGINT_action, foreground_flag);
+            foreground_only_status = '0';
+            wait_status = command_execution(args, &children, SIGINT_action, foreground_only_status);
         }
 
         //We need to remove all the old args, or else they could
@@ -284,6 +289,6 @@ int main(void)
 
         check_background_processes(&children);
     }
-    munmap(foreground_flag, sizeof(int));
+    fclose(fd);
     return EXIT_SUCCESS;
 }
