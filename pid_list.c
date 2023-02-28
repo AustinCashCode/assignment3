@@ -64,29 +64,29 @@ list_of_children * delete_child(list_of_children * to_delete) {
 //Recurses through the passed-in list and checks if they are 
 //still alive. Calls deletion any nodes that contain a PID corresponding.
 //to a dead child process. Done in O(n) time, which is optimal given
-//we need to iterate through each node.
-list_of_children * check_background_processes(list_of_children * children) {
+//we need to iterate through each node. 
+void  check_background_processes(list_of_children ** children) {
     int erval;
 
-    if(!children) {return NULL;} 
+    if(!*children) {return;} 
 
     //We need to perform the recursive call here, or else the function
     //that we use to delete the nodes could interfere with the normal execution
     //of this function.
-    check_background_processes(children -> next);
+    check_background_processes(&(*children) -> next);
 
 
-    if(waitpid(children -> child_PID, &erval, WNOHANG))
+    if(waitpid((*children) -> child_PID, &erval, WNOHANG))
     {    
         if(WIFEXITED(erval)) {
-            printf("Background process %d exited with value %d\n", children -> child_PID, WEXITSTATUS(erval));
-            children = delete_child(children);
+            printf("Background process %d exited with value %d\n", (*children) -> child_PID, WEXITSTATUS(erval));
+            *children = delete_child(*children);
         }
         else {
-            printf("Background process %d terminated by signal %d\n", children -> child_PID, WTERMSIG(erval));
-            children = delete_child(children);
+            printf("Background process %d terminated by signal %d\n", (*children) -> child_PID, WTERMSIG(erval));
+            *children = delete_child(*children);
         }
     }    
-    return children;    //children gets returned because we have altered it with the delete function.
+    return;    //children gets returned because we have altered it with the delete function.
 }
 

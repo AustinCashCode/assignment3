@@ -24,9 +24,10 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/mman.h>
 
 #include "pid_list.c"
-//#include "signal_handlers.c"
+#include "signal_handlers.c"
 
 //These are defined as per the spec.
 #define MAX_LINE 2048   //Longest possible input
@@ -136,7 +137,7 @@ void io_redirect(char ** args)
 //Creates a process which executes the command in args[0]
 //Terminates the child once finished (unless it is a background process)
 //Returns the exit status of the child
-int command_execution(char ** args, list_of_children ** children, struct sigaction SIGINT_action)
+int command_execution(char ** args, list_of_children ** children, struct sigaction SIGINT_action, int * foreground_flag)
 {
     int erval;
     int exit_val = 0;
@@ -171,7 +172,7 @@ int command_execution(char ** args, list_of_children ** children, struct sigacti
         default:
             //parent
 
-            if(background_flag == 1) {
+            if(background_flag == 1 && *foreground_flag == 0) {
                 //background processes
                 *children = push(child_pid, *children);
                 printf("Background PID is %d\n", child_pid);
@@ -181,7 +182,13 @@ int command_execution(char ** args, list_of_children ** children, struct sigacti
                 child_pid = waitpid(child_pid, &erval, 0);
                 if(WIFSIGNALED(erval)) {
                     exit_val = WTERMSIG(erval); //We need to hold on to the previous exit value for the status command
-                    printf("Child %d terminated due to signal %d\n", child_pid, exit_val);
+                    printf("Child %d encountered an error: %d\n", child_pid, exit_val);
+                }
+                else {
+                    exit_val = WEXITSTATUS(erval);
+                    if(exit_val) {
+                        printf("terminated by signal %d\n", exit_val);
+                    }
                 }
             }
             break;
@@ -197,28 +204,30 @@ int main(void)
     char input[MAX_LINE];
     char * token;
     char * args[MAX_ARGS] = {NULL};
-    int argc = 0;
+    int my_argc = 0;
     int child_status;
     int nav = 0;
     int wait_status = 0;
     list_of_children * children = NULL;
 
     struct sigaction SIGINT_action = {0};
-    struct sigaction SIGSTP_action = {0};
+    struct sigaction SIGTSTP_action = {0};
+
 
     SIGINT_action.sa_handler = SIG_IGN;
     sigfillset(&SIGINT_action.sa_mask);
     SIGINT_action.sa_flags = 0;
     sigaction(SIGINT, &SIGINT_action, NULL);
 
-/*
-    SIGSTP_action.sa_handler = handle_SIGSTP;
+
+
+    SIGTSTP_action.sa_handler = handle_SIGTSTP;
     sigfillset(&SIGINT_action.sa_mask);
-    SIGSTP_action.sa_flags = 0;
-    sigaction(SIGSTP, &SIGSTP_action, NULL);
-*/
+    SIGTSTP_action.sa_flags = 0;
+    sigaction(SIGTSTP, &SIGTSTP_action, NULL);
 
-
+    int * foreground_flag = mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    *foreground_flag = 0;
 
 
     while(nav == 0)
@@ -262,18 +271,19 @@ int main(void)
             printf("EXIT STATUS: %d\n", wait_status);
         }
         else {
-            wait_status = command_execution(args, &children, SIGINT_action);
+            wait_status = command_execution(args, &children, SIGINT_action, foreground_flag);
         }
 
         //We need to remove all the old args, or else they could
         //interfere with future commands.
-        argc = count_args(args);
-        for(int i = 0; i < argc; i++) { 
+        my_argc = count_args(args);
+        for(int i = 0; i < my_argc; i++) { 
             free(args[i]); 
             args[i] = NULL;
         }
 
-        children = check_background_processes(children);
+        check_background_processes(&children);
     }
+    munmap(foreground_flag, sizeof(int));
     return EXIT_SUCCESS;
 }
